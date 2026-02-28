@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-pixelproof deep -- Full 9-pass forensic analysis with ELA, noise, edge,
-color-channel, and JPEG compression checks.
+pixelproof deep -- Full 10-pass forensic analysis with ELA, noise, edge,
+color-channel, JPEG compression, and steganography detection checks.
 
 Usage:
     python deep_analysis.py <image_path> [--pdf]
@@ -2246,6 +2246,349 @@ def _md_jpeg_section(d):
     return lines
 
 
+def _md_stego_chi_header():
+    """Return chi-square table markdown header lines.
+
+    Returns:
+        List of header markdown lines.
+    """
+    return [
+        "### Chi-Square LSB Analysis",
+        "",
+        "| Channel | Chi-Sq | DoF | p-value | Verdict |",
+        "|---------|--------|-----|---------|---------|",
+    ]
+
+
+def _md_stego_chi_row(ch, r):
+    """Format a single chi-square result as a markdown table row.
+
+    Args:
+        ch: Channel name (R, G, or B).
+        r: Channel result dictionary.
+
+    Returns:
+        Formatted markdown table row string.
+    """
+    return (
+        f"| {ch} | {r['chi_square']:.2f} | {r['dof']} "
+        f"| {r['p_value']:.4f} | **{r['verdict']}** |"
+    )
+
+
+def _md_stego_chi_table(stego):
+    """Build chi-square steganalysis markdown table.
+
+    Args:
+        stego: Steganography scan results dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    chi = stego["chi"]
+    lines = _md_stego_chi_header()
+    for ch in "RGB":
+        lines.append(_md_stego_chi_row(ch, chi[ch]))
+    lines.extend(["", f"**Overall:** {chi['overall']}", ""])
+    return lines
+
+
+def _md_stego_spa_header():
+    """Return SPA table markdown header lines.
+
+    Returns:
+        List of header markdown lines.
+    """
+    return [
+        "### Sample Pairs Analysis (SPA)",
+        "",
+        "| Channel | Est. Rate |",
+        "|---------|-----------|",
+    ]
+
+
+def _md_stego_spa_table(stego):
+    """Build SPA embedding rate markdown table.
+
+    Args:
+        stego: Steganography scan results dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    spa = stego["spa"]
+    lines = _md_stego_spa_header()
+    for ch in "RGB":
+        lines.append(f"| {ch} | {spa[ch]:.4f} |")
+    lines.extend(
+        ["", f"**Overall estimated embedding rate:** {spa['overall']:.4f}", ""]
+    )
+    return lines
+
+
+def _md_stego_rs_header():
+    """Return RS table markdown header lines.
+
+    Returns:
+        List of header markdown lines.
+    """
+    return [
+        "### RS (Regular-Singular) Analysis",
+        "",
+        "| Channel | Rm | Sm | R-m | S-m | Rate |",
+        "|---------|----|----|-----|-----|------|",
+    ]
+
+
+def _md_stego_rs_row(ch, r):
+    """Format a single RS result as a markdown table row.
+
+    Args:
+        ch: Channel name (R, G, or B).
+        r: Channel result dictionary.
+
+    Returns:
+        Formatted markdown table row string.
+    """
+    return (
+        f"| {ch} | {r['rm']} | {r['sm']} "
+        f"| {r['r_m']} | {r['s_m']} | {r['rate']:.4f} |"
+    )
+
+
+def _md_stego_rs_table(stego):
+    """Build RS steganalysis markdown table.
+
+    Args:
+        stego: Steganography scan results dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    rs = stego["rs"]
+    lines = _md_stego_rs_header()
+    for ch in "RGB":
+        lines.append(_md_stego_rs_row(ch, rs[ch]))
+    lines.extend(["", f"**Overall RS embedding estimate:** {rs['overall']:.4f}", ""])
+    return lines
+
+
+def _md_stego_bitplane_header():
+    """Return bit-plane entropy table markdown header lines.
+
+    Returns:
+        List of header markdown lines.
+    """
+    return [
+        "### Bit-Plane Entropy",
+        "",
+        "| Channel | Bit 0 (LSB) | Bit 1 | Bit 2 | Bit 7 (MSB) |",
+        "|---------|-------------|-------|-------|-------------|",
+    ]
+
+
+def _md_stego_bitplane_row(ch, e):
+    """Format a single bit-plane entropy row as markdown.
+
+    Args:
+        ch: Channel name (R, G, or B).
+        e: List of entropy values for each bit plane.
+
+    Returns:
+        Formatted markdown table row string.
+    """
+    return f"| {ch} | {e[0]:.4f} | {e[1]:.4f} | {e[2]:.4f} | {e[7]:.4f} |"
+
+
+def _md_stego_bitplane_flags(flags):
+    """Build markdown lines for bit-plane anomaly flags.
+
+    Args:
+        flags: List of flag description strings.
+
+    Returns:
+        List of markdown lines (empty list if no flags).
+    """
+    lines = []
+    for f in flags:
+        lines.append(f"- {f}")
+    if lines:
+        lines.append("")
+    return lines
+
+
+def _md_stego_bitplane(stego):
+    """Build bit-plane entropy markdown table.
+
+    Args:
+        stego: Steganography scan results dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    bp = stego["bitplane"]
+    lines = _md_stego_bitplane_header()
+    for ch in "RGB":
+        lines.append(_md_stego_bitplane_row(ch, bp[ch]))
+    lines.append("")
+    lines.extend(_md_stego_bitplane_flags(bp["flags"]))
+    return lines
+
+
+def _md_stego_extracted_hit(hit):
+    """Format a single extracted hidden message for markdown.
+
+    Args:
+        hit: Extraction result dict with 'text' and 'bits' keys.
+
+    Returns:
+        List of markdown lines for this hit.
+    """
+    preview = hit["text"][:300] + "..." if len(hit["text"]) > 300 else hit["text"]
+    return [f"**Found at {hit['bits']} bit(s)/channel:**", f"> {preview}", ""]
+
+
+def _md_stego_extracted(stego):
+    """Build extracted hidden message markdown section.
+
+    Args:
+        stego: Steganography scan results dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    found = stego.get("extracted", [])
+    if not found:
+        return ["No readable hidden messages found (without password).", ""]
+    lines = ["### Extracted Hidden Messages", ""]
+    for hit in found:
+        lines.extend(_md_stego_extracted_hit(hit))
+    return lines
+
+
+def _md_stego_section_intro():
+    """Return the steganography section introduction markdown.
+
+    Returns:
+        List of introductory markdown lines.
+    """
+    return [
+        "## 9. Steganography Detection",
+        "",
+        "Steganography hides secret messages inside image pixels by modifying "
+        "the least significant bits (LSBs). Multiple statistical tests detect "
+        "whether pixel values show the telltale patterns of LSB embedding.",
+        "",
+    ]
+
+
+def _md_stego_section_tables(stego):
+    """Build all steganography sub-analysis markdown tables.
+
+    Args:
+        stego: Steganography scan results dictionary.
+
+    Returns:
+        List of markdown lines for all sub-tables.
+    """
+    lines = _md_stego_chi_table(stego)
+    lines.extend(_md_stego_spa_table(stego))
+    lines.extend(_md_stego_rs_table(stego))
+    lines.extend(_md_stego_bitplane(stego))
+    lines.extend(_md_stego_extracted(stego))
+    if "dct" in stego:
+        lines.extend(_md_stego_dct_section(stego))
+    return lines
+
+
+def _md_stego_section(d):
+    """Build the complete steganography analysis markdown section.
+
+    Args:
+        d: Report data dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    stego = d.get("stego")
+    if not stego:
+        return []
+    lines = _md_stego_section_intro()
+    lines.extend(_md_stego_section_tables(stego))
+    lines.extend([f"**Verdict:** {stego['verdict']}", "", "---", ""])
+    return lines
+
+
+def _md_stego_dct_header():
+    """Return DCT section markdown header with JPEG note.
+
+    Returns:
+        List of markdown header lines.
+    """
+    return [
+        "### DCT Coefficient Analysis (JPEG)",
+        "",
+        "> **Note:** Pixel-level LSB tests above may show false positives "
+        "for JPEG images. JPEG lossy compression creates inherently random "
+        "LSBs. The verdict below uses DCT-level analysis instead.",
+        "",
+    ]
+
+
+def _md_stego_dct_section(stego):
+    """Build the DCT analysis markdown subsection for JPEG images.
+
+    Args:
+        stego: Steganography results dictionary containing 'dct' key.
+
+    Returns:
+        List of markdown lines.
+    """
+    dct = stego["dct"]
+    if dct is None:
+        return ["### DCT Analysis", "", "*OpenCV unavailable.*", ""]
+    lines = _md_stego_dct_header()
+    lines.extend(_md_stego_dct_jsteg(dct))
+    lines.extend(_md_stego_dct_f5(dct))
+    return lines
+
+
+def _md_stego_dct_jsteg(dct):
+    """Build JSteg detection markdown table.
+
+    Args:
+        dct: DCT analysis results dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    return [
+        "**JSteg Detection:**",
+        "",
+        f"- Pair mean ratio: {dct['pair_mean']:.4f} (std: {dct['pair_std']:.4f})",
+        f"- Verdict: **{dct['jsteg']}**",
+        "",
+    ]
+
+
+def _md_stego_dct_f5(dct):
+    """Build F5 detection markdown table.
+
+    Args:
+        dct: DCT analysis results dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    return [
+        "**F5 Detection:**",
+        "",
+        f"- Zero coefficients: {dct['zero_count']} ({dct['zero_pct']:.1f}%)",
+        f"- Verdict: **{dct['f5']}**",
+        "",
+    ]
+
+
 def _md_findings_table(d):
     """Build forensic findings summary table in markdown.
 
@@ -2336,7 +2679,7 @@ def _md_early_analysis(d):
 
 
 def _md_late_analysis(d):
-    """Build channel correlation, noise, and JPEG markdown sections.
+    """Build channel correlation, noise, JPEG, and stego markdown sections.
 
     Args:
         d: Report data dictionary.
@@ -2347,6 +2690,7 @@ def _md_late_analysis(d):
     lines = _md_channel_section(d)
     lines.extend(_md_noise_section(d))
     lines.extend(_md_jpeg_section(d))
+    lines.extend(_md_stego_section(d))
     return lines
 
 
@@ -2500,6 +2844,20 @@ def _check_ancillary_findings(stats, jpeg, ps_blocks):
     return findings
 
 
+def _check_stego_findings(stego):
+    """Evaluate steganography scan results for forensic findings.
+
+    Args:
+        stego: Steganography scan results dictionary, or None.
+
+    Returns:
+        List of (description, severity) tuples.
+    """
+    if not stego:
+        return []
+    return list(stego.get("findings", []))
+
+
 def _compute_all_findings(results):
     """Compute all forensic findings and total severity score.
 
@@ -2519,6 +2877,7 @@ def _compute_all_findings(results):
             results["stats"], results["jpeg"], results["ps_blocks"]
         )
     )
+    findings.extend(_check_stego_findings(results.get("stego")))
     return findings, sum(s for _, s in findings)
 
 
@@ -2558,8 +2917,384 @@ def _get_image_basics(image_path):
     return w, h, fmt, mode
 
 
+def _print_stego_banner():
+    """Print the steganography detection section header and description."""
+    _section("10. STEGANOGRAPHY DETECTION")
+    print(
+        "\n  Steganography hides secret messages inside image pixels by"
+        "\n  modifying the least significant bits (LSBs). Multiple"
+        "\n  statistical tests detect whether pixel values show the"
+        "\n  telltale patterns of LSB embedding."
+    )
+
+
+def _run_stego_detection(image_path):
+    """Run steganography detection as analysis pass 10.
+
+    For JPEG images, adds DCT-level analysis and uses only DCT results
+    for the verdict, since pixel-level LSB tests produce false positives
+    on lossy-compressed images.
+
+    Args:
+        image_path: Path to the image file.
+
+    Returns:
+        Steganography scan results dictionary.
+    """
+    _print_stego_banner()
+    return _run_stego_sub_analyses(image_path)
+
+
+def _print_stego_chi_header():
+    """Print chi-square analysis table header to the terminal."""
+    print(f"\n  --- Chi-Square LSB Analysis ---\n")
+    print(
+        f"    {'Channel':10s} {'Chi-Sq':12s} {'DoF':6s} {'p-value':10s} {'Verdict':10s}"
+    )
+    print(f"    {'-' * 10} {'-' * 12} {'-' * 6} {'-' * 10} {'-' * 10}")
+
+
+def _print_stego_chi_row(ch, r):
+    """Print one chi-square result row to the terminal.
+
+    Args:
+        ch: Channel name (R, G, or B).
+        r: Channel result dictionary.
+    """
+    print(
+        f"    {ch:10s} {r['chi_square']:12.2f} {r['dof']:6d} {r['p_value']:10.4f} {r['verdict']:10s}"
+    )
+
+
+def _print_stego_chi(chi):
+    """Print chi-square steganalysis results for the terminal.
+
+    Args:
+        chi: Chi-square analysis results dictionary.
+    """
+    _print_stego_chi_header()
+    for ch in "RGB":
+        _print_stego_chi_row(ch, chi[ch])
+    print(f"\n    Overall: {chi['overall']}")
+
+
+def _print_stego_spa(spa):
+    """Print SPA results for the terminal.
+
+    Args:
+        spa: SPA results dictionary.
+    """
+    print(f"\n  --- Sample Pairs Analysis (SPA) ---\n")
+    print(f"    {'Channel':10s} {'Est. Rate':12s}")
+    print(f"    {'-' * 10} {'-' * 12}")
+    for ch in "RGB":
+        print(f"    {ch:10s} {spa[ch]:12.4f}")
+    print(f"\n    Overall estimated embedding rate: {spa['overall']:.4f}")
+
+
+def _print_stego_rs_row(ch, r):
+    """Print one RS analysis result row to the terminal.
+
+    Args:
+        ch: Channel name (R, G, or B).
+        r: Channel result dictionary.
+    """
+    print(
+        f"    {ch:10s} {r['rm']:8d} {r['sm']:8d} {r['r_m']:8d} {r['s_m']:8d} {r['rate']:8.4f}"
+    )
+
+
+def _print_stego_rs(rs):
+    """Print RS steganalysis results for the terminal.
+
+    Args:
+        rs: RS analysis results dictionary.
+    """
+    print(f"\n  --- RS (Regular-Singular) Analysis ---\n")
+    print(f"    {'Channel':10s} {'Rm':8s} {'Sm':8s} {'R-m':8s} {'S-m':8s} {'Rate':8s}")
+    print(f"    {'-' * 10} {'-' * 8} {'-' * 8} {'-' * 8} {'-' * 8} {'-' * 8}")
+    for ch in "RGB":
+        _print_stego_rs_row(ch, rs[ch])
+    print(f"\n    Overall RS embedding estimate: {rs['overall']:.4f}")
+
+
+def _print_stego_bitplane_header():
+    """Print bit-plane entropy table header to the terminal."""
+    print(f"\n  --- Bit-Plane Entropy Analysis ---\n")
+    print(
+        f"    {'Channel':10s} {'Bit 0 (LSB)':12s} {'Bit 1':12s} {'Bit 2':12s} {'Bit 7 (MSB)':12s}"
+    )
+    print(f"    {'-' * 10} {'-' * 12} {'-' * 12} {'-' * 12} {'-' * 12}")
+
+
+def _print_stego_bitplane_flags(flags):
+    """Print bit-plane anomaly flags to the terminal.
+
+    Args:
+        flags: List of flag description strings.
+    """
+    if not flags:
+        return
+    print("\n    Flags:")
+    for f in flags:
+        print(f"      >> {f}")
+
+
+def _print_stego_bitplane(bp):
+    """Print bit-plane entropy analysis for the terminal.
+
+    Args:
+        bp: Bit-plane analysis results dictionary.
+    """
+    _print_stego_bitplane_header()
+    for ch in "RGB":
+        e = bp[ch]
+        print(f"    {ch:10s} {e[0]:12.4f} {e[1]:12.4f} {e[2]:12.4f} {e[7]:12.4f}")
+    _print_stego_bitplane_flags(bp["flags"])
+
+
+def _print_stego_extracted(found):
+    """Print brute-force LSB extraction results for the terminal.
+
+    Args:
+        found: List of successful extraction dicts.
+    """
+    print(f"\n  --- Brute-Force LSB Extraction ---\n")
+    if not found:
+        print("    No readable hidden messages found (without password).")
+        return
+    for hit in found:
+        preview = hit["text"][:200] + "..." if len(hit["text"]) > 200 else hit["text"]
+        print(f"    FOUND at {hit['bits']} bit(s)/channel:")
+        print(f'    >> "{preview}"')
+
+
+def _print_stego_verdict(verdict, findings):
+    """Print steganography verdict to the terminal.
+
+    Args:
+        verdict: Verdict string.
+        findings: List of (description, severity) tuples.
+    """
+    print(f"\n    Stego verdict: {verdict}")
+    if findings:
+        for i, (desc, sev) in enumerate(findings, 1):
+            print(f"      {i}. {desc} (severity {sev})")
+
+
+def _run_stego_chi_spa(image_path):
+    """Run chi-square and SPA analyses and print their results.
+
+    Args:
+        image_path: Path to the image file.
+
+    Returns:
+        Tuple of (chi, spa) results.
+    """
+    from stego import _chi_square_analysis, _spa_analysis
+
+    chi = _chi_square_analysis(image_path)
+    _print_stego_chi(chi)
+    spa = _spa_analysis(image_path)
+    _print_stego_spa(spa)
+    return chi, spa
+
+
+def _run_stego_rs_bp_extract(image_path):
+    """Run RS, bit-plane, and brute-force analyses and print results.
+
+    Args:
+        image_path: Path to the image file.
+
+    Returns:
+        Tuple of (rs, bp, found) results.
+    """
+    from stego import _rs_analysis, _analyze_bit_planes, _brute_force_decode
+
+    rs = _rs_analysis(image_path)
+    _print_stego_rs(rs)
+    bp = _analyze_bit_planes(image_path)
+    _print_stego_bitplane(bp)
+    found = _brute_force_decode(image_path)
+    _print_stego_extracted(found)
+    return rs, bp, found
+
+
+def _run_stego_lossless_branch(chi, spa, rs, bp, found):
+    """Handle steganography verdict for lossless images.
+
+    Args:
+        chi: Chi-square results.
+        spa: SPA results.
+        rs: RS results.
+        bp: Bit-plane results.
+        found: Brute-force extraction hits.
+
+    Returns:
+        Steganography scan results dictionary.
+    """
+    from stego import _compute_scan_verdict
+
+    verdict, findings = _compute_scan_verdict(chi, spa, rs, bp, found)
+    _print_stego_verdict(verdict, findings)
+    return _build_stego_result(chi, spa, rs, bp, found, verdict, findings, None)
+
+
+def _run_stego_sub_analyses(image_path):
+    """Execute all steganography sub-analyses and print results.
+
+    For JPEG images, additionally runs DCT-level analysis and computes
+    the verdict using only DCT results (pixel-level tests are unreliable
+    for JPEG). For lossless formats, uses pixel-level tests as before.
+
+    Args:
+        image_path: Path to the image file.
+
+    Returns:
+        Steganography scan results dictionary.
+    """
+    from stego import _is_jpeg_file
+
+    chi, spa = _run_stego_chi_spa(image_path)
+    rs, bp, found = _run_stego_rs_bp_extract(image_path)
+    if _is_jpeg_file(image_path):
+        return _run_stego_jpeg_branch(image_path, chi, spa, rs, bp, found)
+    return _run_stego_lossless_branch(chi, spa, rs, bp, found)
+
+
+def _run_stego_jpeg_branch(image_path, chi, spa, rs, bp, found):
+    """Handle steganography results for JPEG images in deep analysis.
+
+    Prints a JPEG warning, runs DCT analysis, and computes the verdict
+    using only DCT-level results.
+
+    Args:
+        image_path: Path to the JPEG image.
+        chi: Chi-square results (informational only).
+        spa: SPA results (informational only).
+        rs: RS results (informational only).
+        bp: Bit-plane results (informational only).
+        found: Brute-force extraction hits.
+
+    Returns:
+        Steganography scan results dictionary with DCT data.
+    """
+    from stego import _jpeg_dct_analysis, _compute_jpeg_verdict
+
+    _print_stego_jpeg_warning()
+    dct = _jpeg_dct_analysis(image_path)
+    _print_stego_dct(dct)
+    verdict, findings = _compute_jpeg_verdict(dct, found)
+    _print_stego_verdict(verdict, findings)
+    return _build_stego_result(chi, spa, rs, bp, found, verdict, findings, dct)
+
+
+def _print_stego_jpeg_warning():
+    """Print JPEG false-positive warning in deep analysis output."""
+    print(f"\n  {'*' * 60}")
+    print(f"  * JPEG FORMAT: pixel-level LSB tests above may show")
+    print(f"  * false positives. JPEG lossy compression creates random")
+    print(f"  * LSBs. Verdict uses DCT-level analysis instead.")
+    print(f"  {'*' * 60}")
+
+
+def _print_stego_dct(dct):
+    """Print DCT analysis results for the terminal.
+
+    Args:
+        dct: DCT analysis results dictionary, or None.
+    """
+    if dct is None:
+        print("\n  --- DCT Analysis ---")
+        print("    OpenCV unavailable; DCT analysis skipped.")
+        return
+    _print_stego_dct_jsteg(dct)
+    _print_stego_dct_f5(dct)
+
+
+def _print_stego_dct_jsteg(dct):
+    """Print JSteg detection results for the terminal.
+
+    Args:
+        dct: DCT analysis results dictionary.
+    """
+    print(f"\n  --- DCT JSteg Detection ---")
+    print(f"    Pair mean ratio: {dct['pair_mean']:.4f} (std: {dct['pair_std']:.4f})")
+    print(f"    JSteg verdict: {dct['jsteg']}")
+
+
+def _print_stego_dct_f5(dct):
+    """Print F5 detection results for the terminal.
+
+    Args:
+        dct: DCT analysis results dictionary.
+    """
+    print(f"\n  --- DCT F5 Detection ---")
+    print(f"    Zero coefficients: {dct['zero_count']} ({dct['zero_pct']:.1f}%)")
+    print(f"    F5 verdict: {dct['f5']}")
+
+
+def _build_stego_pixel_dict(chi, spa, rs, bp):
+    """Build the pixel-level analysis portion of stego results.
+
+    Args:
+        chi: Chi-square results.
+        spa: SPA results.
+        rs: RS results.
+        bp: Bit-plane results.
+
+    Returns:
+        Dictionary with pixel-level stego analysis data.
+    """
+    return {"chi": chi, "spa": spa, "rs": rs, "bitplane": bp}
+
+
+def _build_stego_base_dict(chi, spa, rs, bp, found, verdict, findings):
+    """Build the base stego results dictionary without DCT data.
+
+    Args:
+        chi: Chi-square results.
+        spa: SPA results.
+        rs: RS results.
+        bp: Bit-plane results.
+        found: Brute-force extraction hits.
+        verdict: Final verdict string.
+        findings: List of (description, severity) tuples.
+
+    Returns:
+        Dictionary with pixel-level stego results and verdict.
+    """
+    results = _build_stego_pixel_dict(chi, spa, rs, bp)
+    results["extracted"] = found
+    results["verdict"] = verdict
+    results["findings"] = findings
+    return results
+
+
+def _build_stego_result(chi, spa, rs, bp, found, verdict, findings, dct):
+    """Assemble steganography scan results into a dictionary.
+
+    Args:
+        chi: Chi-square results.
+        spa: SPA results.
+        rs: RS results.
+        bp: Bit-plane results.
+        found: Brute-force extraction hits.
+        verdict: Final verdict string.
+        findings: List of (description, severity) tuples.
+        dct: DCT analysis results (None for lossless images).
+
+    Returns:
+        Comprehensive results dictionary.
+    """
+    results = _build_stego_base_dict(chi, spa, rs, bp, found, verdict, findings)
+    if dct is not None:
+        results["dct"] = dct
+    return results
+
+
 def _run_all_analyses(image_path):
-    """Execute all 9 forensic analysis passes on an image.
+    """Execute all 10 forensic analysis passes on an image.
 
     Args:
         image_path: Path to the image file.
@@ -2576,6 +3311,7 @@ def _run_all_analyses(image_path):
     channels = _channel_correlation(image_path)
     noise_vals, noise_mean, noise_std, noise_cv = _noise_analysis(image_path)
     jpeg = _check_jpeg_compression(image_path)
+    stego = _run_stego_detection(image_path)
     return {
         "exif": exif,
         "info_keys": info_keys,
@@ -2598,6 +3334,7 @@ def _run_all_analyses(image_path):
         "noise_std": noise_std,
         "noise_cv": noise_cv,
         "jpeg": jpeg,
+        "stego": stego,
     }
 
 
@@ -2734,7 +3471,7 @@ def _attempt_pdf_generation(md_path, image_path):
 
 
 def _full_forensic_analysis(image_path, generate_pdf_flag=False):
-    """Run the complete 9-pass forensic analysis pipeline on an image.
+    """Run the complete 10-pass forensic analysis pipeline on an image.
 
     Args:
         image_path: Path to the image file to analyze.
@@ -2770,7 +3507,7 @@ def _parse_cli_args():
     if not args:
         print("Usage: python deep_analysis.py <image_path> [--pdf]")
         print("")
-        print("  Runs 9-pass forensic analysis and saves:")
+        print("  Runs 10-pass forensic analysis and saves:")
         print("    <image>_ELA.png     Error Level Analysis image")
         print("    <image>_REPORT.md   Comprehensive Markdown report")
         print("    <image>_REPORT.pdf  PDF report (with --pdf)")

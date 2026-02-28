@@ -2,7 +2,7 @@
 
 **Detect fake, AI-generated, and Photoshopped images in seconds.**
 
-PixelProof is a forensic-grade image analysis toolkit that exposes manipulation through metadata inspection, Error Level Analysis (ELA), noise profiling, and more — all from the command line.
+PixelProof is a forensic-grade image analysis toolkit that exposes manipulation through metadata inspection, Error Level Analysis (ELA), noise profiling, steganography detection, and more — all from the command line.
 
 **AUTHOR:** [Kevin Thomas](ket189@pitt.edu)
 
@@ -17,15 +17,16 @@ PixelProof is a forensic-grade image analysis toolkit that exposes manipulation 
 
 ## What It Detects
 
-| Check                         | What It Finds                                                                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **EXIF Metadata**             | Missing camera info, stripped timestamps, absent GPS — signs the image didn't come from a real camera |
-| **Photoshop Traces**          | Adobe 8BIM resource blocks and scrubbed caption digests embedded in file headers                      |
-| **Error Level Analysis**      | Regions that compress differently from the rest — indicates pasting, cloning, or compositing          |
-| **Noise Consistency**         | Different noise levels across regions — a hallmark of images stitched from multiple sources           |
-| **Color Channel Correlation** | Abnormal R/G/B relationships that can indicate AI generation or heavy processing                      |
-| **Edge Density**              | Unbalanced edge distribution that can reveal composited boundaries                                    |
-| **JPEG Compression**          | Quantization table analysis to detect multiple re-saves                                               |
+| Check                         | What It Finds                                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **EXIF Metadata**             | Missing camera info, stripped timestamps, absent GPS — signs the image didn't come from a real camera          |
+| **Photoshop Traces**          | Adobe 8BIM resource blocks and scrubbed caption digests embedded in file headers                               |
+| **Error Level Analysis**      | Regions that compress differently from the rest — indicates pasting, cloning, or compositing                   |
+| **Noise Consistency**         | Different noise levels across regions — a hallmark of images stitched from multiple sources                    |
+| **Color Channel Correlation** | Abnormal R/G/B relationships that can indicate AI generation or heavy processing                               |
+| **Edge Density**              | Unbalanced edge distribution that can reveal composited boundaries                                             |
+| **JPEG Compression**          | Quantization table analysis to detect multiple re-saves                                                        |
+| **Steganography Detection**   | Chi-square, SPA, RS, bit-plane entropy, and JPEG DCT-level (JSteg/F5) analysis with false-positive suppression |
 
 ---
 
@@ -70,7 +71,7 @@ Output:
 ============================================================
 ```
 
-### Run a Deep Analysis (9 passes)
+### Run a Deep Analysis (10 passes)
 
 ```bash
 python deep_analysis.py suspect.jpg
@@ -79,6 +80,31 @@ python deep_analysis.py suspect.jpg
 This runs all forensic checks and saves:
 - `suspect_ELA.png` — ELA visualization highlighting manipulated regions
 - `suspect_REPORT.md` — full Markdown forensic report
+
+### Steganography — Hide & Detect Secret Messages
+
+```bash
+# Hide a message inside an image
+python stego.py encode photo.png stego_photo.png -m "secret message"
+
+# Hide with a password (pixel-scatter encryption)
+python stego.py encode photo.png stego_photo.png -m "secret" --password s3cret
+
+# Hide with higher capacity (2 bits per channel)
+python stego.py encode photo.png stego_photo.png -m "secret" --bits 2
+
+# Hide a file's contents
+python stego.py encode photo.png stego_photo.png -f secret.txt
+
+# Decode a hidden message
+python stego.py decode stego_photo.png
+
+# Decode with password
+python stego.py decode stego_photo.png --password s3cret
+
+# Run full steganography detection scan
+python stego.py scan suspect.png
+```
 
 ### Generate a PDF Report
 
@@ -180,7 +206,8 @@ Every phone and camera writes dozens of EXIF tags — Make, Model, ISO, shutter 
 ```
 pixelproof/
 ├── pixelproof.py      # Quick metadata + Photoshop scan
-├── deep_analysis.py   # Full 9-pass forensic analysis
+├── deep_analysis.py   # Full 10-pass forensic analysis
+├── stego.py           # LSB steganography encode/decode/detect + JPEG DCT analysis
 ├── generate_pdf.py    # Markdown → PDF report generator
 ├── pyproject.toml     # Package config & dependencies
 ├── LICENSE            # MIT
@@ -206,6 +233,17 @@ python deep_analysis.py suspect.jpg
 ```bash
 python deep_analysis.py suspect.jpg --pdf
 # Outputs: suspect_ELA.png + suspect_REPORT.md + suspect_REPORT.pdf
+```
+
+### Steganography scan
+```bash
+python stego.py scan suspect.png
+```
+
+### Hide and extract messages
+```bash
+python stego.py encode cover.png stego.png -m "Hidden message"
+python stego.py decode stego.png
 ```
 
 ---
