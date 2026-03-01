@@ -31,6 +31,7 @@ import PIL.ImageStat
 import PIL.ExifTags
 
 from forensic_engine import analyze_advanced_forensics, compute_authenticity_assessment
+from nation_state_engine import analyze_nation_state_passes
 from provenance import create_provenance_bundle
 
 # ---------------------------------------------------------------------------
@@ -2304,6 +2305,63 @@ def _md_advanced_rows(adv):
     ]
 
 
+def _md_nation_state_header():
+    """Build heading and table header for nation-state markdown section.
+
+    Returns:
+        List of markdown lines.
+    """
+    return [
+        "## 12. Nation-State Forensics",
+        "",
+        "| Check | Metric | Value |",
+        "|------|--------|-------|",
+    ]
+
+
+def _md_nation_state_rows(ns):
+    """Build metric rows for nation-state markdown section.
+
+    Args:
+        ns: Nation-state results dictionary.
+
+    Returns:
+        List of markdown table rows.
+    """
+    thumb = ns.get("thumbnail", {})
+    ben = ns.get("benford", {})
+    dj = ns.get("double_jpeg", {})
+    fft = ns.get("fft_spectral", {})
+    prnu = ns.get("prnu", {})
+    ill = ns.get("illumination", {})
+    return [
+        f"| Thumbnail | Diff score | {thumb.get('score', 0):.4f} |",
+        f"| Benford | Chi-squared | {ben.get('chi_squared', 0):.4f} |",
+        f"| Double JPEG | Ratio | {dj.get('ratio', 0):.4f} |",
+        f"| FFT Spectral | Score | {fft.get('score', 0):.4f} |",
+        f"| PRNU | Score | {prnu.get('score', 0):.4f} |",
+        f"| Illumination | Score | {ill.get('score', 0):.4f} |",
+    ]
+
+
+def _md_nation_state_section(d):
+    """Build nation-state forensics markdown section.
+
+    Args:
+        d: Report data dictionary.
+
+    Returns:
+        List of markdown lines.
+    """
+    ns = d.get("nation_state", {})
+    if not ns:
+        return []
+    lines = _md_nation_state_header()
+    lines.extend(_md_nation_state_rows(ns))
+    lines.extend(["", "---", ""])
+    return lines
+
+
 def _md_auth_header():
     """Build markdown header for authenticity fusion section.
 
@@ -2311,7 +2369,7 @@ def _md_auth_header():
         List of markdown header lines.
     """
     return [
-        "## 12. Authenticity Fusion",
+        "## 13. Authenticity Fusion",
         "",
         "| Metric | Value |",
         "|--------|-------|",
@@ -2800,6 +2858,7 @@ def _md_late_analysis(d):
     lines.extend(_md_jpeg_section(d))
     lines.extend(_md_stego_section(d))
     lines.extend(_md_advanced_forensics(d))
+    lines.extend(_md_nation_state_section(d))
     lines.extend(_md_authenticity_section(d))
     return lines
 
@@ -2982,6 +3041,20 @@ def _check_advanced_findings(advanced):
     return list(advanced.get("findings", []))
 
 
+def _check_nation_state_findings(nation_state):
+    """Evaluate nation-state forensic findings for verdict fusion.
+
+    Args:
+        nation_state: Nation-state results dictionary, or None.
+
+    Returns:
+        List of (description, severity) tuples.
+    """
+    if not nation_state:
+        return []
+    return list(nation_state.get("findings", []))
+
+
 def _compute_all_findings(results):
     """Compute all forensic findings and total severity score.
 
@@ -3003,6 +3076,7 @@ def _compute_all_findings(results):
     )
     findings.extend(_check_stego_findings(results.get("stego")))
     findings.extend(_check_advanced_findings(results.get("advanced")))
+    findings.extend(_check_nation_state_findings(results.get("nation_state")))
     return findings, sum(s for _, s in findings)
 
 
@@ -3454,6 +3528,111 @@ def _run_advanced_forensics(image_path):
     return advanced
 
 
+def _print_nation_state_header():
+    """Print the nation-state forensics section header.
+
+    Returns:
+        None.
+    """
+    _section("12. NATION-STATE FORENSICS")
+
+
+def _print_thumbnail_metric(ns):
+    """Print thumbnail comparison metric.
+
+    Args:
+        ns: Nation-state results dictionary.
+    """
+    thumb = ns.get("thumbnail", {})
+    avail = "yes" if thumb.get("available") else "no"
+    print(f"\n  Thumbnail available: {avail}")
+    if thumb.get("available"):
+        print(f"  Thumbnail diff:     {thumb.get('score', 0):.4f}")
+
+
+def _print_benford_metric(ns):
+    """Print Benford's Law analysis metric.
+
+    Args:
+        ns: Nation-state results dictionary.
+    """
+    ben = ns.get("benford", {})
+    if ben.get("applicable"):
+        print(f"  Benford chi-sq:     {ben.get('chi_squared', 0):.4f}")
+        print(f"  Benford score:      {ben.get('score', 0):.4f}")
+
+
+def _print_double_jpeg_metric(ns):
+    """Print double JPEG detection metric.
+
+    Args:
+        ns: Nation-state results dictionary.
+    """
+    dj = ns.get("double_jpeg", {})
+    if dj.get("applicable"):
+        print(f"  Double-JPEG ratio:  {dj.get('ratio', 0):.4f}")
+        print(f"  Double-JPEG score:  {dj.get('score', 0):.4f}")
+
+
+def _print_fft_metric(ns):
+    """Print FFT spectral analysis metric.
+
+    Args:
+        ns: Nation-state results dictionary.
+    """
+    fft = ns.get("fft_spectral", {})
+    print(f"  FFT spectral score: {fft.get('score', 0):.4f}")
+
+
+def _print_prnu_metric(ns):
+    """Print PRNU sensor noise metric.
+
+    Args:
+        ns: Nation-state results dictionary.
+    """
+    prnu = ns.get("prnu", {})
+    print(f"  PRNU score:         {prnu.get('score', 0):.4f}")
+
+
+def _print_illumination_metric(ns):
+    """Print illumination consistency metric.
+
+    Args:
+        ns: Nation-state results dictionary.
+    """
+    ill = ns.get("illumination", {})
+    print(f"  Illumination score: {ill.get('score', 0):.4f}")
+
+
+def _print_nation_state_summary(ns):
+    """Print all nation-state forensic metrics.
+
+    Args:
+        ns: Nation-state results dictionary.
+    """
+    _print_thumbnail_metric(ns)
+    _print_benford_metric(ns)
+    _print_double_jpeg_metric(ns)
+    _print_fft_metric(ns)
+    _print_prnu_metric(ns)
+    _print_illumination_metric(ns)
+
+
+def _run_nation_state_passes(image_path):
+    """Run nation-state forensic passes and print output.
+
+    Args:
+        image_path: Path to the image file.
+
+    Returns:
+        Nation-state results dictionary.
+    """
+    _print_nation_state_header()
+    ns = analyze_nation_state_passes(image_path)
+    _print_nation_state_summary(ns)
+    return ns
+
+
 def _run_all_analyses(image_path):
     """Execute all 10 forensic analysis passes on an image.
 
@@ -3474,6 +3653,7 @@ def _run_all_analyses(image_path):
     jpeg = _check_jpeg_compression(image_path)
     stego = _run_stego_detection(image_path)
     advanced = _run_advanced_forensics(image_path)
+    nation_state = _run_nation_state_passes(image_path)
     return {
         "exif": exif,
         "info_keys": info_keys,
@@ -3498,6 +3678,7 @@ def _run_all_analyses(image_path):
         "jpeg": jpeg,
         "stego": stego,
         "advanced": advanced,
+        "nation_state": nation_state,
     }
 
 

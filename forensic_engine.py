@@ -468,6 +468,28 @@ def _metadata_score(exif, ps_blocks):
     return max(0.0, min(1.0, max(ps_flag, missing_core)))
 
 
+def _nation_state_score(nation_state):
+    """Compute nation-state forensics contribution score.
+
+    Args:
+        nation_state: Nation-state results dictionary or None.
+
+    Returns:
+        Score in range [0.0, 1.0].
+    """
+    if not nation_state:
+        return 0.0
+    scores = [
+        nation_state.get("thumbnail", {}).get("score", 0.0),
+        nation_state.get("benford", {}).get("score", 0.0),
+        nation_state.get("double_jpeg", {}).get("score", 0.0),
+        nation_state.get("fft_spectral", {}).get("score", 0.0),
+        nation_state.get("prnu", {}).get("score", 0.0),
+        nation_state.get("illumination", {}).get("score", 0.0),
+    ]
+    return max(0.0, min(1.0, sum(scores) / max(len(scores), 1)))
+
+
 def _consistency_score(noise_cv, channels, ela_max):
     """Compute consistency-anomaly score from cross-domain signals.
 
@@ -495,11 +517,12 @@ def _weighted_fusion(components):
         Weighted fused score in range [0.0, 1.0].
     """
     weights = {
-        "severity": 0.22,
-        "stego": 0.18,
-        "advanced": 0.26,
-        "metadata": 0.2,
-        "consistency": 0.14,
+        "severity": 0.16,
+        "stego": 0.12,
+        "advanced": 0.18,
+        "metadata": 0.14,
+        "consistency": 0.10,
+        "nation_state": 0.30,
     }
     return sum(components[name] * weights[name] for name in weights)
 
@@ -569,10 +592,13 @@ def _apply_guardrails(probability, components):
     severity = components.get("severity", 0.0)
     metadata = components.get("metadata", 0.0)
     advanced = components.get("advanced", 0.0)
+    ns = components.get("nation_state", 0.0)
     if severity >= 0.65 and metadata >= 0.55:
         return max(probability, 0.82)
     if severity >= 0.55 and advanced >= 0.30:
         return max(probability, 0.72)
+    if ns >= 0.40 and metadata >= 0.50:
+        return max(probability, 0.78)
     return probability
 
 
@@ -632,6 +658,7 @@ def _component_scores(results):
         "advanced": _advanced_score(results.get("advanced")),
         "metadata": _metadata_score(exif, results.get("ps_blocks", [])),
         "consistency": consistency,
+        "nation_state": _nation_state_score(results.get("nation_state")),
     }
 
 
