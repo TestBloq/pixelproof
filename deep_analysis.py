@@ -5,13 +5,14 @@ pixelproof deep -- Full 10-pass forensic analysis with ELA, noise, edge,
 color-channel, JPEG compression, and steganography detection checks.
 
 Usage:
-    python deep_analysis.py <image_path> [--pdf]
+    python deep_analysis.py <image_path> [--pdf] [--provenance]
 
 Outputs:
     - Detailed terminal report (ANALYSIS.md quality)
     - <image>_ELA.png   -- Error Level Analysis visualization
     - <image>_REPORT.md -- Markdown forensic report
     - <image>_REPORT.pdf -- PDF report (with --pdf flag)
+    - <image>_PROVENANCE.json -- Provenance manifest (with --provenance, or implicit with --pdf)
 """
 
 import sys
@@ -3771,7 +3772,9 @@ def _parse_cli_args():
         print("    <image>_REPORT.md   Comprehensive Markdown report")
         print("    <image>_REPORT.pdf  PDF report (with --pdf)")
         sys.exit(1)
-    return args[0], "--pdf" in flags, "--provenance" in flags
+    want_pdf = "--pdf" in flags
+    want_provenance = "--provenance" in flags or want_pdf
+    return args[0], want_pdf, want_provenance
 
 
 def _validate_image_file(image_path):

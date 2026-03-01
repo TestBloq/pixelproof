@@ -44,13 +44,14 @@ pip install .
 Run a full forensic analysis (with PDF):
 
 ```bash
-.venv/bin/python deep_analysis.py IMG_0436.JPG --pdf
+.venv/bin/python deep_analysis.py IMG_0436.JPG --pdf --provenance
 ```
 
 What you get:
 - `*_ELA.png` (Error Level Analysis image)
 - `*_REPORT.md` (full forensic report)
 - `*_REPORT.pdf` (PDF report)
+- `*_PROVENANCE.json` (artifact hash manifest)
 - Final terminal output with **tamper probability**, **confidence**, and **fusion verdict**
 
 ---
